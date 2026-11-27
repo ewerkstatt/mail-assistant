@@ -30,6 +30,9 @@ class Mail:
     links: list = field(default_factory=list)        # (href, visible text)
     attachments: list = field(default_factory=list)  # file names
     auth_results: str = ""
+    return_path: str = ""
+    list_unsubscribe: str = ""
+    precedence: str = ""
 
 
 def decode(value) -> str:
@@ -143,6 +146,9 @@ def parse_message(raw: bytes, key: str) -> Mail:
         links=links,
         attachments=attachments,
         auth_results=" ".join(decode(h) for h in (msg.get_all("Authentication-Results") or [])),
+        return_path=parseaddr(msg.get("Return-Path", ""))[1].lower(),
+        list_unsubscribe=decode(msg.get("List-Unsubscribe", "")),
+        precedence=(msg.get("Precedence") or "").strip().lower(),
     )
 
 

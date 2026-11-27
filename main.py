@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from tkinter import messagebox
 
-from analyse import analyse_mail
+from analyse import ANALYSIS_VERSION, analyse_mail
 from config import Config, app_dir
 from mailfetch import fetch_mails
 from speech import Speaker
@@ -70,6 +70,38 @@ class Cache:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self.data, ensure_ascii=False), encoding="utf-8")
         os.replace(tmp, self.path)
+
+
+class SenderRules:
+    """User overrides: sender address (or '@domain') -> category. Stored in sender_rules.json."""
+
+    def __init__(self):
+        self.path = app_dir() / "sender_rules.json"
+        try:
+            self.data = {k.lower(): v for k, v in json.loads(self.path.read_text(encoding="utf-8")).items()
+                         if v in CAT_INFO}
+        except Exception:
+            self.data = {}
+
+    def save(self):
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+        os.replace(tmp, self.path)
+
+    def lookup(self, addr: str):
+        addr = (addr or "").lower()
+        if addr in self.data:
+            return self.data[addr]
+        domain = addr.rsplit("@", 1)[-1] if "@" in addr else ""
+        return self.data.get("@" + domain) if domain else None
+
+    def set(self, addr: str, cat):
+        addr = addr.lower()
+        if cat:
+            self.data[addr] = cat
+        else:
+            self.data.pop(addr, None)
+        self.save()
 
 
 class SettingsDialog(tk.Toplevel):
@@ -145,6 +177,7 @@ class App:
         self.root, self.demo = root, demo
         self.cfg = Config()
         self.cache = Cache()
+        self.rules = SenderRules()
         self.speaker = Speaker(self.cfg.getint("speech_rate"))
         self.q = queue.Queue()
         self.records = {}          # key -> analysis result
@@ -210,15 +243,28 @@ class App:
 
         self.listbox = tk.Listbox(body, font=self.font, bg=PANEL, fg=FG, selectbackground=FG,
                                   selectforeground="#000", activestyle="none", bd=0,
-                                  highlightthickness=3, highlightcolor="#FFD400", exportselection=False)
+                                  highlightthickness=3, highlightcolor="#FFD400", exportselection=False, height=1)
         self.listbox.bind("<<ListboxSelect>>", lambda e: self.on_select())
         body.add(self.listbox, minsize=300, stretch="always")
 
         right = tk.Frame(body, bg=PANEL)
-        self.detail = tk.Text(right, font=self.font, bg=PANEL, fg=FG, wrap="word", bd=0, padx=20, pady=16,
+        self.detail = tk.Text(right, font=self.font, bg=PANEL, fg=FG, wrap="word", bd=0, padx=20, pady=16, height=1,
                               cursor="arrow", spacing1=4, spacing3=4)
         sb = tk.Scrollbar(right, command=self.detail.yview, width=24)
         self.detail.configure(yscrollcommand=sb.set, state="disabled")
+        rule_bar = tk.Frame(right, bg="#262626", padx=16, pady=8)
+        rule_bar.pack(side="bottom", fill="x")
+        tk.Label(rule_bar, text="Diesen Absender immer einstufen als:",
+                 font=self.font_small, bg="#262626", fg="#9AD0FF", anchor="w").pack(fill="x")
+        row = tk.Frame(rule_bar, bg="#262626")
+        row.pack(fill="x", pady=(6, 0))
+        rule_buttons = [(k, lbl, c) for k, lbl, c, _ in CATS] + [(None, "Automatisch", FG)]
+        for col, (key, label, color) in enumerate(rule_buttons):
+            tk.Button(row, text=label, font=self.font_small, bg="#000", fg=color, bd=2,
+                      activebackground=color if key else "#444", activeforeground="#000" if key else FG,
+                      cursor="hand2", command=lambda k=key: self.set_sender_rule(k)).grid(
+                row=0, column=col, sticky="we", padx=3, ipady=2)
+            row.columnconfigure(col, weight=1)
         sb.pack(side="right", fill="y")
         self.detail.pack(side="left", fill="both", expand=True)
         body.add(right, minsize=400, stretch="always")
@@ -230,6 +276,7 @@ class App:
         self.detail.tag_configure("label", foreground="#9AD0FF", font=self.font_bold)
         self.detail.tag_configure("subject", font=self.font_big)
         self.detail.tag_configure("warn", foreground="#FF5050", font=self.font_bold)
+        self.detail.tag_configure("hint", foreground="#9A9A9A", font=self.font_small)
 
         self.status = tk.Label(r, text="", font=self.font_small, bg=BG, fg="#9AD0FF", anchor="w")
         self.status.pack(fill="x", padx=16, pady=(0, 10))
@@ -239,6 +286,9 @@ class App:
         r = self.root
         for i, (key, *_rest) in enumerate(CATS, start=1):
             r.bind(str(i), lambda e, k=key: self.select_category(k))
+        for i, (key, *_rest) in enumerate(CATS, start=1):
+            r.bind(f"<Control-Key-{i}>", lambda e, k=key: (self.set_sender_rule(k), "break")[1])
+        r.bind("<Control-Key-0>", lambda e: (self.set_sender_rule(None), "break")[1])
         r.bind("<F5>", lambda e: self.refresh())
         r.bind("<space>", lambda e: (self.speak_current(), "break")[1])
         r.bind("<Return>", lambda e: self.speak_current())
@@ -253,6 +303,45 @@ class App:
         self.listbox.bind("<Down>", lambda e: (self.move(+1), "break")[1])
         self.listbox.bind("<Up>", lambda e: (self.move(-1), "break")[1])
         self.listbox.bind("<space>", lambda e: (self.speak_current(), "break")[1])
+
+    # ---------- categories ----------
+    def rule_for(self, rec):
+        """User rule for this sender, unless the sender looks forged."""
+        rule = self.rules.lookup(rec.get("from_addr", ""))
+        return rule if rule and not rec.get("spoofed") else None
+
+    def cat_of(self, rec) -> str:
+        return self.rule_for(rec) or rec["kategorie"]
+
+    def set_sender_rule(self, cat):
+        key = self.selected_key()
+        if not key:
+            return
+        rec = self.records[key]
+        addr = rec.get("from_addr", "")
+        if not addr:
+            return
+        old_idx = self.visible.index(key)
+        self.rules.set(addr, cat)
+        if cat and rec.get("spoofed"):
+            msg = "Regel gespeichert. Diese Nachricht bleibt aber unter Vorsicht, weil der Absender gefälscht sein könnte."
+        elif cat:
+            msg = f"Nachrichten von {addr} kommen ab jetzt immer unter {CAT_INFO[cat][1]}."
+        else:
+            msg = f"Eigene Regel für {addr} entfernt. Die Einstufung erfolgt wieder automatisch."
+        self.set_status(msg)
+        self.speaker.say(msg)
+        # selected mail may have left the current group: keep the cursor position
+        self._update_cat_buttons()
+        self.visible = [k for k in self.order if k in self.records and self.cat_of(self.records[k]) == self.current]
+        if key in self.visible:
+            self.render(keep_selection=True)
+        else:
+            self.render(keep_selection=False)
+            if self.visible:
+                self._suppress_speak = True
+                self._select_index(min(old_idx, len(self.visible) - 1))
+                self._suppress_speak = False
 
     # ---------- actions ----------
     def change_font(self, delta: int):
@@ -269,7 +358,7 @@ class App:
         for key in self.order:
             rec = self.records.get(key)
             if rec:
-                counts[rec["kategorie"]] += 1
+                counts[self.cat_of(rec)] += 1
         for key, label, color, _ in CATS:
             b = self.cat_buttons[key]
             text = f"{label} ({counts[key]})"
@@ -293,7 +382,7 @@ class App:
     def render(self, keep_selection=True):
         selected = self.selected_key() if keep_selection else None
         self._update_cat_buttons()
-        self.visible = [k for k in self.order if k in self.records and self.records[k]["kategorie"] == self.current]
+        self.visible = [k for k in self.order if k in self.records and self.cat_of(self.records[k]) == self.current]
         self.listbox.delete(0, "end")
         for key in self.visible:
             rec = self.records[key]
@@ -348,7 +437,7 @@ class App:
             msg = "Keine Nachrichten in dieser Gruppe." if not self.busy else "Nachrichten werden geladen …"
             d.insert("end", msg)
         else:
-            cat = rec["kategorie"]
+            cat = self.cat_of(rec)
             if cat == "verdacht":
                 d.insert("end", "⚠ ACHTUNG: Verdacht auf Spam oder Betrug\n", "verdacht")
             else:
@@ -373,7 +462,17 @@ class App:
                     d.insert("end", "Was tun:\n", "label")
                     d.insert("end", rec["handlung"] + "\n\n", ("warn",) if cat == "verdacht" else ())
                 d.insert("end", "Begründung:\n", "label")
-                d.insert("end", (rec.get("grund") or "-") + "\n")
+                rule = self.rules.lookup(rec.get("from_addr", ""))
+                if rule and not rec.get("spoofed"):
+                    d.insert("end", f"Eigene Regel: Absender immer unter „{CAT_INFO[rule][1]}“.\n")
+                    d.insert("end", f"(Automatische Einstufung wäre: {CAT_INFO[rec['kategorie']][1]})\n", "hint")
+                else:
+                    d.insert("end", (rec.get("grund") or "-") + "\n")
+                    if rule:
+                        d.insert("end", "Ihre Regel für diesen Absender wurde nicht angewendet, weil die Nachricht "
+                                        "gefälscht sein könnte.\n", "warn")
+                if rec.get("esp"):
+                    d.insert("end", f"Versendet über: {rec['esp']} (Newsletter-Dienst)\n", "hint")
                 if rec.get("attachments"):
                     d.insert("end", "\nAnhänge: ", "label")
                     d.insert("end", ", ".join(rec["attachments"]) + "\n")
@@ -390,7 +489,8 @@ class App:
         if self.show_text:
             text = f"Nachricht von {sender}. {rec.get('text', '')[:4000]}"
         else:
-            prefix = "Achtung, Verdacht auf Betrug." if rec["kategorie"] == "verdacht" else CAT_INFO[rec["kategorie"]][3] + "."
+            cat = self.cat_of(rec)
+            prefix = "Achtung, Verdacht auf Betrug." if cat == "verdacht" else CAT_INFO[cat][3] + "."
             text = (f"{prefix} Von {sender}, {spoken_date(rec['date'])}. Betreff: {rec['subject']}. "
                     f"{rec.get('zusammenfassung', '')} {rec.get('handlung', '')}")
         self.speaker.say(text)
@@ -454,9 +554,10 @@ class App:
         settings["password"] = cfg.get_secret(f"imap:{cfg.get('imap_user')}")
         settings["api_key"] = cfg.get_secret("anthropic")
         settings["trusted"] = cfg.trusted()
-        known = set(self.cache.data.keys())
-        # show cached results immediately
-        for key, rec in self.cache.data.items():
+        # entries from an older analysis version are re-analysed
+        current = {k: v for k, v in self.cache.data.items() if v.get("v") == ANALYSIS_VERSION}
+        known = set(current)
+        for key, rec in current.items():  # show cached results immediately
             self.records.setdefault(key, rec)
         threading.Thread(target=self._worker, args=(settings, known), daemon=True).start()
 

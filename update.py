@@ -16,7 +16,7 @@ from pathlib import Path
 
 from version import VERSION
 
-GITHUB_REPO = "ewerkstatt/mail-assistant"  # TODO: set to your GitHub "user/repo"
+GITHUB_REPO = "ewerkstatt/mail-assistant"
 ASSET_NAME = "Mail-Assistant.exe"
 API = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 

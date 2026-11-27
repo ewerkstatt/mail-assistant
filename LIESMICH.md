@@ -39,6 +39,19 @@ Einstellungen und Cache: `%APPDATA%\MailAssistant\`.
 | T | Mailtext statt Zusammenfassung |
 | Strg + / Strg – | Schrift größer / kleiner |
 | F5 | Neu laden (sonst automatisch alle 10 Minuten) |
+| Strg+1 / 2 / 3 | Absender der gewählten Mail immer als Wichtig / Nicht wichtig / Vorsicht |
+| Strg+0 | Eigene Regel für diesen Absender entfernen |
+
+## Eigene Absender-Regeln
+
+Unter der Detailansicht: „Diesen Absender immer einstufen als …“. Die Regel gilt für die echte
+Absenderadresse (nicht den Anzeigenamen), sofort für alle vorhandenen und alle künftigen Mails.
+Gespeichert in `%APPDATA%\MailAssistant\sender_rules.json`; dort sind auch Domain-Regeln möglich,
+z. B. `"@meinarzt.at": "wichtig"`.
+
+Eine Regel wird **nicht** angewendet, wenn die Mail gefälscht wirkt (SPF/DKIM/DMARC-Fehler, fremde
+Adresse im Anzeigenamen, gefährlicher Anhang). Sonst könnte ein Betrüger mit gefälschter Absenderadresse
+die Regel ausnutzen.
 
 ## Wie die Einstufung funktioniert
 
@@ -48,6 +61,9 @@ Einstellungen und Cache: `%APPDATA%\MailAssistant\`.
 2. **Claude** bewertet Absender, Betreff, Links und die ersten 4000 Zeichen Text und schreibt eine
    kurze Zusammenfassung mit Empfehlung.
 3. Starke Regel-Treffer erzwingen immer „Vorsicht“, auch bei bekannten Absendern (Spoofing).
+4. Newsletter über bekannte Versanddienste (Mailchimp, MailerLite, CleverReach, Brevo, rapidmail,
+   Klaviyo, HubSpot, SendGrid u. a., Liste `ESP_DOMAINS` in `analyse.py`) werden erkannt:
+   Tracking-Links, abweichende Antwortadresse und Werbe-Formulierungen zählen dann nicht als Warnzeichen.
 
 Jede Mail wird nur einmal an die API geschickt (Cache nach Message-ID). Ohne API-Key oder bei
 API-Fehlern gibt es eine einfache Regel-Einstufung; diese Mails werden beim nächsten Laden erneut geprüft.
