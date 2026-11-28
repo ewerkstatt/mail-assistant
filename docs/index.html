@@ -19,7 +19,7 @@
     figure { margin: 0 0 28px; }
     figure img { width: 100%; height: auto; display: block; border: 1px solid #333; border-radius: 8px; }
     figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
-    ul { padding-left: 1.2em; } li { margin: 6px 0; }
+    ul, ol { padding-left: 1.2em; } li { margin: 6px 0; }
     kbd { background: var(--panel); border: 1px solid #444; border-radius: 4px; padding: 1px 6px; font-size: .9em; }
     .btn { display:inline-block; background: var(--yellow); color:#000; font-weight:700; text-decoration:none; padding: 12px 22px; border-radius: 6px; }
     .btn:hover, .btn:focus { background:#fff; }
@@ -52,12 +52,31 @@
   <h2>Was das Programm macht</h2>
   <ul>
     <li>Holt die Mails der letzten Tage per IMAP, <strong>nur lesend</strong>. Es wird nichts gelöscht, verschoben, beantwortet oder als gelesen markiert. Thunderbird oder Outlook laufen unverändert weiter.</li>
-    <li>Teilt jede Nachricht in <em>Wichtig</em>, <em>Nicht wichtig</em> oder <em>Vorsicht</em> ein und schreibt in einfachen Worten dazu, worum es geht und was zu tun ist.</li>
+    <li>Teilt jede Nachricht in <em>Wichtig</em>, <em>Nicht wichtig</em> oder <em>Vorsicht</em> ein und schreibt in einfachen Worten dazu, worum es geht und was zu tun ist (Zusammenfassung nur mit Claude API-Key).</li>
     <li>Erkennt typische Betrugsmerkmale: gefälschte Absender (SPF/DKIM/DMARC), Markennamen mit fremder Domain, verdächtige Links und gefährliche Anhänge.</li>
     <li>Liest Nachrichten auf Wunsch vor (Windows-Sprachausgabe).</li>
     <li>Eigene Regeln pro Absender oder Domain, z. B. „Ordination immer wichtig“. Wirkt eine Mail gefälscht, greift die Regel nicht.</li>
     <li>Aktualisiert sich selbst, sobald eine neue Version auf GitHub erscheint.</li>
   </ul>
+
+  <h2>Einrichtung</h2>
+  <p>Beim ersten Start öffnen sich die Einstellungen, später über das Zahnrad oder <kbd>Strg</kbd> + <kbd>E</kbd>. Nötig sind nur Mailserver, Benutzer und Passwort, dieselben Daten wie in Thunderbird oder Outlook.</p>
+  <figure>
+    <img src="screenshots/einstellungen.png" width="1167" height="568" alt="Einstellungsdialog mit Mailserver securemail.a1.net, Port 993, Benutzer, Passwort, Claude API-Key, KI-Modell, Zeitraum und bekannten Absendern">
+    <figcaption>Der Einstellungsdialog (Beispielwerte). Passwort und API-Key werden in der Windows-Anmeldeinformationsverwaltung gespeichert.</figcaption>
+  </figure>
+  <p class="note"><strong>Claude API-Key: keine Voraussetzung, aber sehr empfehlenswert.</strong> Ohne Key arbeitet das Programm nur mit festen Regeln. Es erkennt dann zwar viele Fälschungen, kann aber nicht verstehen, worum es in einer Mail geht, und schreibt keine Zusammenfassung. Persönliche Nachrichten von unbekannten Absendern landen so leicht unter „Nicht wichtig“. Einen Key gibt es unter <a href="https://console.anthropic.com/">console.anthropic.com</a>. Abgerechnet wird nach Verbrauch; da jede Mail nur einmal geprüft wird und ein kleines Modell reicht, bleiben die Kosten gering.</p>
+
+  <h2>Ablauf mit API-Key</h2>
+  <ol>
+    <li><strong>Mails holen:</strong> Beim Start, mit <kbd>F5</kbd> und alle 10 Minuten verbindet sich das Programm per IMAP mit dem Postfach und lädt die Mails der letzten 7 Tage (höchstens 80). Der Zugriff ist nur lesend.</li>
+    <li><strong>Cache:</strong> Bereits geprüfte Mails werden sofort aus dem Zwischenspeicher angezeigt. Nur neue Mails gehen in die Prüfung.</li>
+    <li><strong>Regelprüfung:</strong> Für jede neue Mail prüft das Programm lokal SPF/DKIM/DMARC, Markennamen mit fremder Domain, abweichende Antwortadressen, verdächtige Links, gefährliche Anhänge und ob die Mail über einen bekannten Newsletter-Dienst kommt.</li>
+    <li><strong>Claude bewertet:</strong> Absender, Betreff, Links, die Ergebnisse der Regelprüfung und der Anfang des Textes gehen an Claude (bis zu vier Mails gleichzeitig). Zurück kommen Kategorie, eine kurze Zusammenfassung, die Begründung und eine Empfehlung, was zu tun ist.</li>
+    <li><strong>Absicherung:</strong> Schlägt die Regelprüfung stark an, landet die Mail immer unter „Vorsicht“, auch wenn Claude sie anders sieht. Eigene Absender-Regeln gelten danach, aber nicht bei Fälschungsverdacht.</li>
+    <li><strong>Anzeige:</strong> Das Ergebnis wird gespeichert, die Liste aktualisiert sich laufend, und am Ende sagt das Programm an, wie viele wichtige, unwichtige und verdächtige Nachrichten da sind.</li>
+  </ol>
+  <p>Ist die API einmal nicht erreichbar, greift für diese Mails die einfache Regelprüfung. Sie werden beim nächsten Laden noch einmal an Claude geschickt.</p>
 
   <h2>Bedienung</h2>
   <ul>
