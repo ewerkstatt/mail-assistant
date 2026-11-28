@@ -267,6 +267,33 @@ def _build_user_message(mail, rc: dict) -> str:
     )
 
 
+def explain_error(e: Exception) -> str:
+    """Short German explanation of an API failure for the status bar."""
+    if isinstance(e, urllib.error.HTTPError):
+        try:
+            body = e.read().decode("utf-8", "replace")
+            msg = json.loads(body).get("error", {}).get("message", "")
+        except Exception:
+            msg = ""
+        low = msg.lower()
+        if e.code == 401:
+            return "API-Key ungültig (Einstellungen prüfen)"
+        if e.code == 400 and "credit" in low:
+            return "API-Guthaben aufgebraucht (console.anthropic.com → Billing)"
+        if e.code == 403:
+            return "API-Zugriff verweigert" + (f": {msg}" if msg else "")
+        if e.code == 404 or "model" in low and "not" in low:
+            return "KI-Modell nicht gefunden (Einstellung „KI-Modell“ prüfen)"
+        if e.code == 429:
+            return "Zu viele Anfragen an die KI (Limit erreicht), später erneut versuchen"
+        if e.code in (500, 502, 503, 529):
+            return "KI-Dienst gerade überlastet, später erneut versuchen"
+        return f"API-Fehler {e.code}" + (f": {msg}" if msg else "")
+    if isinstance(e, (urllib.error.URLError, TimeoutError, OSError)):
+        return "Keine Verbindung zur KI (Internet/Firewall prüfen)"
+    return f"KI-Fehler: {e}"
+
+
 def ask_claude(mail, rc: dict, api_key, model, timeout=60) -> dict:
     body = {
         "model": model,
@@ -291,8 +318,13 @@ def ask_claude(mail, rc: dict, api_key, model, timeout=60) -> dict:
             return result
         except urllib.error.HTTPError as e:
             last_err = e
-            if e.code in (429, 500, 502, 503, 529):  # transient: back off and retry
-                time.sleep(2 * (attempt + 1))
+            if e.code in (429, 500, 502, 503, 529) and attempt < 2:  # transient: back off and retry
+                retry_after = e.headers.get("retry-after") if e.headers else None
+                try:
+                    delay = min(30, float(retry_after)) if retry_after else 3 * (attempt + 1)
+                except ValueError:
+                    delay = 3 * (attempt + 1)
+                time.sleep(delay)
                 continue
             raise
         except (urllib.error.URLError, TimeoutError) as e:
@@ -325,7 +357,7 @@ def analyse_mail(mail, trusted: list, api_key: str, model: str) -> dict:
         try:
             ai = ask_claude(mail, rc, api_key, model)
         except Exception as e:
-            result["error"] = str(e)
+            result["error"] = explain_error(e)
 
     if ai:
         cat = ai["kategorie"]

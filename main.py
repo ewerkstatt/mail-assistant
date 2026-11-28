@@ -573,7 +573,7 @@ class App:
             if new:
                 if not s["api_key"]:
                     q.put(("status", "Kein API-Key eingetragen – nur einfache Prüfung möglich."))
-                with ThreadPoolExecutor(max_workers=4) as pool:
+                with ThreadPoolExecutor(max_workers=2) as pool:  # stay below low API rate limits
                     futures = [pool.submit(analyse_mail, m, s["trusted"], s["api_key"], s["model"]) for m in new]
                     for i, fut in enumerate(as_completed(futures), start=1):
                         q.put(("record", fut.result()))
@@ -619,6 +619,13 @@ class App:
             self.render(keep_selection=True)
         self.root.after(150, self._poll)
 
+    def _log_error(self, text):
+        try:
+            with open(app_dir() / "error.log", "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S}  {text}\n")
+        except OSError:
+            pass
+
     def _finish(self, total):
         self.busy = False
         if not self.demo:
@@ -631,7 +638,16 @@ class App:
         unchecked = sum(1 for k in self.order if k in self.records and not self.records[k].get("checked"))
         msg = f"Fertig. {total} Nachrichten. Stand: {datetime.now():%H:%M} Uhr."
         if unchecked and not self.demo:
-            msg += f"  {unchecked} konnten nicht von der KI geprüft werden."
+            errors = [self.records[k].get("error") for k in self.order
+                      if k in self.records and self.records[k].get("error")]
+            msg += f"  {unchecked} konnten nicht von der KI geprüft werden"
+            if errors:
+                reason = max(set(errors), key=errors.count)  # most frequent cause
+                msg += f": {reason}"
+                self._log_error(reason)
+            elif not self.cfg.get_secret("anthropic"):
+                msg += ": kein API-Key eingetragen"
+            msg += "."
         self.set_status(msg, error=bool(unchecked and not self.demo))
         self._update_cat_buttons()
         if self.cfg.getint("auto_speak") and not self.quiet:
