@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mail-Assistant – E-Mails sortieren, gut lesbar, nur lesend</title>
+  <meta name="description" content="Windows-Programm, das ein Postfach per IMAP nur liest und die Mails in Wichtig, Nicht wichtig und Vorsicht einteilt. Große Schrift, hoher Kontrast, Vorlesefunktion.">
+  <style>
+    :root { --bg:#0d0d0d; --panel:#1a1a1a; --fg:#f2f2f2; --muted:#a8a8a8; --yellow:#FFD400; --red:#FF5050; --blue:#9AD0FF; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg); font:18px/1.6 system-ui, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 48px 20px 64px; }
+    h1 { font-size: 2.4rem; margin: 0 0 8px; }
+    h2 { font-size: 1.4rem; margin: 48px 0 12px; color: var(--blue); }
+    .lead { font-size: 1.2rem; color: var(--muted); margin: 0 0 28px; }
+    .cats { display:flex; gap:10px; flex-wrap:wrap; margin: 0 0 28px; }
+    .cat { padding: 6px 14px; border-radius: 6px; font-weight: 700; background: var(--panel); }
+    .cat.w { color: var(--yellow); } .cat.n { color: #bfbfbf; } .cat.v { color: var(--red); }
+    figure { margin: 0 0 28px; }
+    figure img { width: 100%; height: auto; display: block; border: 1px solid #333; border-radius: 8px; }
+    figcaption { font-size: .9rem; color: var(--muted); margin-top: 8px; }
+    ul { padding-left: 1.2em; } li { margin: 6px 0; }
+    kbd { background: var(--panel); border: 1px solid #444; border-radius: 4px; padding: 1px 6px; font-size: .9em; }
+    .btn { display:inline-block; background: var(--yellow); color:#000; font-weight:700; text-decoration:none; padding: 12px 22px; border-radius: 6px; }
+    .btn:hover, .btn:focus { background:#fff; }
+    a { color: var(--blue); }
+    .note { background: var(--panel); border-left: 4px solid var(--blue); padding: 12px 16px; border-radius: 4px; }
+    footer { margin-top: 56px; font-size: .9rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Mail-Assistant</h1>
+  <p class="lead">Ein kleines Windows-Programm für Menschen, die mit dem E-Mail-Programm nicht mehr gut zurechtkommen oder schlecht sehen. Es liest das Postfach, sortiert die Nachrichten vor und zeigt sie groß und kontrastreich an.</p>
+
+  <div class="cats">
+    <span class="cat w">Wichtig</span>
+    <span class="cat n">Nicht wichtig</span>
+    <span class="cat v">⚠ Vorsicht</span>
+  </div>
+
+  <figure>
+    <img src="screenshots/wichtig.png" width="1400" height="900" alt="Mail-Assistant mit der Gruppe Wichtig: links die Liste, rechts die Detailansicht einer Nachricht von Anna Berger mit Zusammenfassung">
+    <figcaption>Wichtige Nachrichten mit kurzer Zusammenfassung. Alle Mails im Bild sind Beispieldaten aus dem Demo-Modus.</figcaption>
+  </figure>
+
+  <figure>
+    <img src="screenshots/vorsicht.png" width="1400" height="900" alt="Mail-Assistant mit der Gruppe Vorsicht: eine gefälschte A1-Rechnungsmail wird als Verdacht auf Betrug markiert">
+    <figcaption>Eine gefälschte A1-Mail landet unter „Vorsicht“, mit Begründung und Hinweis, was zu tun ist.</figcaption>
+  </figure>
+
+  <h2>Was das Programm macht</h2>
+  <ul>
+    <li>Holt die Mails der letzten Tage per IMAP, <strong>nur lesend</strong>. Es wird nichts gelöscht, verschoben, beantwortet oder als gelesen markiert. Thunderbird oder Outlook laufen unverändert weiter.</li>
+    <li>Teilt jede Nachricht in <em>Wichtig</em>, <em>Nicht wichtig</em> oder <em>Vorsicht</em> ein und schreibt in einfachen Worten dazu, worum es geht und was zu tun ist.</li>
+    <li>Erkennt typische Betrugsmerkmale: gefälschte Absender (SPF/DKIM/DMARC), Markennamen mit fremder Domain, verdächtige Links und gefährliche Anhänge.</li>
+    <li>Liest Nachrichten auf Wunsch vor (Windows-Sprachausgabe).</li>
+    <li>Eigene Regeln pro Absender oder Domain, z. B. „Ordination immer wichtig“. Wirkt eine Mail gefälscht, greift die Regel nicht.</li>
+    <li>Aktualisiert sich selbst, sobald eine neue Version auf GitHub erscheint.</li>
+  </ul>
+
+  <h2>Bedienung</h2>
+  <ul>
+    <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> wechseln zwischen den Gruppen</li>
+    <li><kbd>↑</kbd> <kbd>↓</kbd> nächste oder vorherige Nachricht</li>
+    <li><kbd>Leertaste</kbd> vorlesen, <kbd>Esc</kbd> stoppen</li>
+    <li><kbd>T</kbd> ganzen Text statt Zusammenfassung zeigen</li>
+    <li><kbd>Strg</kbd> + <kbd>+</kbd> / <kbd>–</kbd> Schrift größer oder kleiner</li>
+  </ul>
+
+  <h2>Herunterladen</h2>
+  <p>Die fertige <code>Mail-Assistant.exe</code> samt SHA256-Prüfsumme liegt bei den Releases. Am besten nach <code>%LOCALAPPDATA%\Programs\Mail-Assistant\</code> kopieren, damit das Selbst-Update funktioniert.</p>
+  <p><a class="btn" href="https://github.com/ewerkstatt/mail-assistant/releases/latest">Neueste Version herunterladen</a></p>
+
+  <h2>Datenschutz</h2>
+  <p class="note">Zur Einstufung werden Absender, Betreff, Links und der Anfang des Mailtexts an die Claude-API von Anthropic geschickt. Jede Mail nur einmal. Passwort und API-Key liegen in der Windows-Anmeldeinformationsverwaltung, nicht im Klartext. Ohne API-Key arbeitet das Programm mit einfachen lokalen Regeln.</p>
+
+  <footer>
+    Quellcode: <a href="https://github.com/ewerkstatt/mail-assistant">github.com/ewerkstatt/mail-assistant</a> · Entwickelt von <a href="https://ewerkstatt.com">E-Werkstatt</a>, Wien
+  </footer>
+</main>
+</body>
+</html>
