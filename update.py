@@ -62,21 +62,31 @@ def install_update(exe_url: str, sha_url: str) -> None:
     tmpdir = Path(tempfile.gettempdir())
     new_exe = tmpdir / "Mail-Assistant-update.exe"
     new_exe.write_bytes(data)
+    log = Path(os.environ.get("APPDATA") or Path.home()) / "MailAssistant" / "update.log"
 
+    # Waits (max ~2 min) until the old process has released the exe, swaps it, restarts.
+    # ping instead of timeout: works without an interactive console.
     script = tmpdir / "mail-assistant-update.cmd"
     script.write_text(
         "@echo off\r\n"
         f'set "TARGET={target}"\r\n'
         f'set "NEW={new_exe}"\r\n'
-        "for /l %%i in (1,1,30) do (\r\n"
+        f'set "LOG={log}"\r\n'
+        "echo %date% %time% start update>>\"%LOG%\"\r\n"
+        "for /l %%i in (1,1,120) do (\r\n"
         '  move /y "%NEW%" "%TARGET%" >nul 2>nul && goto ok\r\n'
-        "  timeout /t 1 /nobreak >nul\r\n"
+        "  ping -n 2 127.0.0.1 >nul\r\n"
         ")\r\n"
+        "echo %date% %time% FAILED: exe still locked>>\"%LOG%\"\r\n"
+        'start "" "%TARGET%"\r\n'
         "exit /b 1\r\n"
         ":ok\r\n"
+        "echo %date% %time% replaced, restarting>>\"%LOG%\"\r\n"
         'start "" "%TARGET%"\r\n'
         '(goto) 2>nul & del "%~f0"\r\n',
         encoding="mbcs" if os.name == "nt" else "utf-8",
     )
-    flags = 0x00000008 | 0x08000000  # DETACHED_PROCESS | CREATE_NO_WINDOW
-    subprocess.Popen(["cmd.exe", "/c", str(script)], creationflags=flags, close_fds=True)
+    # CREATE_NO_WINDOW alone: cmd gets a hidden console that child processes inherit.
+    # (DETACHED_PROCESS would make every child console program open its own window.)
+    CREATE_NO_WINDOW = 0x08000000
+    subprocess.Popen(["cmd.exe", "/c", str(script)], creationflags=CREATE_NO_WINDOW, close_fds=True)

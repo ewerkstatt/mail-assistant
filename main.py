@@ -607,7 +607,7 @@ class App:
                     self.set_status(f"Neue Version {payload} wird installiert …")
                     self.speaker.say("Das Programm wird aktualisiert und startet gleich neu.")
                 elif kind == "restart":
-                    self.root.after(2500, self.root.destroy)
+                    self.root.after(2500, self._hard_exit)
                 elif kind == "error":
                     self.busy = False
                     self.set_status(payload, error=True)
@@ -618,6 +618,14 @@ class App:
         if changed:
             self.render(keep_selection=True)
         self.root.after(150, self._poll)
+
+    def _hard_exit(self):
+        """Quit immediately so the updater can replace the exe; running API calls are abandoned."""
+        try:
+            self.speaker.stop()
+            self.root.destroy()
+        finally:
+            os._exit(0)
 
     def _log_error(self, text):
         try:
